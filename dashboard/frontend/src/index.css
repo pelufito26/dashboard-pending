@@ -1,0 +1,33 @@
+:root {
+  --bg: #0f0f12;
+  --surface: #18181d;
+  --border: #2a2a32;
+  --text: #e8e8ed;
+  --text-muted: #8b8b9a;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --success: #22c55e;
+  --warning: #eab308;
+  --card-radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input, button, select {
+  font-family: inherit;
+}
