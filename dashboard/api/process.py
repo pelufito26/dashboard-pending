@@ -26,8 +26,7 @@ app.add_middleware(
 )
 
 
-@app.post("/")
-async def process_file(file: UploadFile = File(...)):
+async def _process_file_impl(file: UploadFile):
     if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Solo se aceptan archivos Excel (.xlsx o .xls)")
 
@@ -55,3 +54,9 @@ async def process_file(file: UploadFile = File(...)):
         "tabla": tabla,
         "total_filas": len(df_result),
     }
+
+
+@app.post("/")
+@app.post("/api/process")
+async def process_file(file: UploadFile = File(...)):
+    return await _process_file_impl(file)
