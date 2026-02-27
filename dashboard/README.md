@@ -18,6 +18,16 @@ Para dejarlo publicado y no tener que correr nada en local:
 
 4. **Deploy.** Vercel va a instalar dependencias del frontend, construir la app y desplegar la API en `/api/process`. La URL quedará tipo `https://tu-proyecto.vercel.app`.
 
+### Guardar el último archivo subido (opcional)
+
+Para que quien entre a la web vea el último Excel procesado y pueda reemplazarlo subiendo uno nuevo:
+
+1. En [Vercel Marketplace](https://vercel.com/marketplace) agregá **Upstash Redis** (o Redis) a tu proyecto.
+2. La integración inyecta las variables de entorno. El backend usa `UPSTASH_REDIS_REST_URL` y `UPSTASH_REDIS_REST_TOKEN` (o `KV_REST_API_URL` / `KV_REST_API_TOKEN`).
+3. Redeploy. Al subir un Excel se guarda el resultado; al entrar a la web se carga ese resultado y cualquiera puede subir otro archivo para reemplazarlo.
+
+Si no configurás Redis, el dashboard sigue funcionando: solo no se persiste el último archivo entre visitas.
+
 **Límite importante:** En Vercel el body de las serverless tiene un **límite de 4,5 MB**. Si el Excel es más pesado, puede fallar la subida. Para archivos muy grandes, seguí usando el script en local.
 
 ---

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 
 const API_BASE = '/api'
@@ -14,6 +14,17 @@ export default function App() {
   const [filtroAccionable, setFiltroAccionable] = useState('')
   const [filtroOrderType, setFiltroOrderType] = useState('')
   const [filtroMilestone, setFiltroMilestone] = useState('')
+  const [loadingLast, setLoadingLast] = useState(true)
+
+  useEffect(() => {
+    fetch(`${API_BASE}/process`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.stats && data?.tabla) setResult(data)
+      })
+      .catch(() => {})
+      .finally(() => setLoadingLast(false))
+  }, [])
 
   const handleUpload = async (e) => {
     const f = e.target.files?.[0]
@@ -118,6 +129,12 @@ export default function App() {
             </>
           )}
         </label>
+        {result && (
+          <p style={styles.muted}>Podés subir un nuevo Excel para reemplazar los datos mostrados abajo.</p>
+        )}
+        {!loadingLast && !result && !loading && (
+          <p style={styles.muted}>Para que el último archivo se guarde y lo vea quien entre, agregá <strong>Upstash Redis</strong> en el proyecto de Vercel (Marketplace → Redis).</p>
+        )}
         {error && <p style={styles.error}>{error}</p>}
       </section>
 
