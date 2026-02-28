@@ -31,9 +31,11 @@ def _get_redis():
             return Redis.from_env()
         except Exception:
             pass
+        # Vercel + Upstash suelen inyectar KV_REST_API_* o KV_URL; REST API debe ser https://
         url = (
             os.environ.get("UPSTASH_REDIS_REST_URL")
             or os.environ.get("KV_REST_API_URL")
+            or os.environ.get("KV_URL")
             or os.environ.get("KVREST_API_URL")
         )
         token = (
@@ -41,6 +43,9 @@ def _get_redis():
             or os.environ.get("KV_REST_API_TOKEN")
             or os.environ.get("KVREST_API_TOKEN")
         )
+        if not url or not url.startswith("http"):
+            url = None
+            token = None
         if url and token:
             return Redis(url=url, token=token)
     except Exception:
