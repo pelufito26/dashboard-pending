@@ -191,7 +191,6 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
                       {chartData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -222,7 +221,6 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
                       {merchantGeneralData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -252,7 +250,6 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     >
                       {ageingData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
