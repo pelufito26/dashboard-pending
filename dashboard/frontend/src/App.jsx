@@ -15,11 +15,13 @@ export default function App() {
   const [filtroOrderType, setFiltroOrderType] = useState('')
   const [filtroMilestone, setFiltroMilestone] = useState('')
   const [loadingLast, setLoadingLast] = useState(true)
+  const [redisOk, setRedisOk] = useState(null)
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
+        if (data && typeof data.redis_ok === 'boolean') setRedisOk(data.redis_ok)
         if (data?.stats && data?.tabla) setResult(data)
       })
       .catch(() => {})
@@ -132,7 +134,10 @@ export default function App() {
         {result && (
           <p style={styles.muted}>Podés subir un nuevo Excel para reemplazar los datos mostrados abajo.</p>
         )}
-        {!loadingLast && !result && !loading && (
+        {!loadingLast && redisOk === false && (
+          <p style={styles.muted}>Redis no detectado. En Vercel: Settings → Environment Variables deben existir <strong>UPSTASH_REDIS_REST_URL</strong> y <strong>UPSTASH_REDIS_REST_TOKEN</strong> (o agregá Upstash Redis desde Marketplace). Redeploy después.</p>
+        )}
+        {!loadingLast && !result && !loading && redisOk !== false && (
           <p style={styles.muted}>Para que el último archivo se guarde y lo vea quien entre, agregá <strong>Upstash Redis</strong> en el proyecto de Vercel (Marketplace → Redis).</p>
         )}
         {error && <p style={styles.error}>{error}</p>}

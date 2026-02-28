@@ -19,13 +19,28 @@ import pandas as pd
 from accionables_logic import process_excel
 
 LAST_KEY = "dashboard:last"
+# Upstash free tier: max request 10MB. Limitar filas para no superar.
+MAX_TABLA_ROWS_STORED = 1500
 
 
 def _get_redis():
     try:
         from upstash_redis.asyncio import Redis
-        url = os.environ.get("UPSTASH_REDIS_REST_URL") or os.environ.get("KV_REST_API_URL")
-        token = os.environ.get("UPSTASH_REDIS_REST_TOKEN") or os.environ.get("KV_REST_API_TOKEN")
+        # Primero from_env (Vercel + Upstash suelen inyectar UPSTASH_REDIS_REST_URL / TOKEN)
+        try:
+            return Redis.from_env()
+        except Exception:
+            pass
+        url = (
+            os.environ.get("UPSTASH_REDIS_REST_URL")
+            or os.environ.get("KV_REST_API_URL")
+            or os.environ.get("KVREST_API_URL")
+        )
+        token = (
+            os.environ.get("UPSTASH_REDIS_REST_TOKEN")
+            or os.environ.get("KV_REST_API_TOKEN")
+            or os.environ.get("KVREST_API_TOKEN")
+        )
         if url and token:
             return Redis(url=url, token=token)
     except Exception:
@@ -75,20 +90,22 @@ async def _process_file_impl(file: UploadFile):
 @app.get("/")
 @app.get("/api/process")
 async def get_last():
-    """Devuelve el último resultado guardado (para que quien entre lo vea). Sin Redis devuelve vacío."""
+    """Devuelve el último resultado guardado. Incluye redis_ok para diagnóstico."""
     redis = _get_redis()
     if not redis:
-        return {"stats": None, "tabla": []}
+        return {"stats": None, "tabla": [], "redis_ok": False}
     try:
         raw = await redis.get(LAST_KEY)
     except Exception:
-        return {"stats": None, "tabla": []}
+        return {"stats": None, "tabla": [], "redis_ok": True}
     if raw is None:
-        return {"stats": None, "tabla": []}
+        return {"stats": None, "tabla": [], "redis_ok": True}
     try:
-        return json.loads(raw)
+        out = json.loads(raw)
+        out["redis_ok"] = True
+        return out
     except json.JSONDecodeError:
-        return {"stats": None, "tabla": []}
+        return {"stats": None, "tabla": [], "redis_ok": True}
 
 
 @app.post("/")
@@ -97,8 +114,20 @@ async def process_file(file: UploadFile = File(...)):
     result = await _process_file_impl(file)
     redis = _get_redis()
     if redis:
+        # Guardar con tabla limitada para no superar 10MB (límite Upstash free)
+        to_store = {
+            "stats": result["stats"],
+            "tabla": result["tabla"][:MAX_TABLA_ROWS_STORED],
+            "total_filas": result["total_filas"],
+        }
+        payload = json.dumps(to_store, ensure_ascii=False)
         try:
-            await redis.set(LAST_KEY, json.dumps(result, ensure_ascii=False))
+            await redis.set(LAST_KEY, payload)
         except Exception:
-            pass
+            # Si falla por tamaño, intentar solo stats + 500 filas
+            try:
+                to_store["tabla"] = result["tabla"][:500]
+                await redis.set(LAST_KEY, json.dumps(to_store, ensure_ascii=False))
+            except Exception:
+                pass
     return result
