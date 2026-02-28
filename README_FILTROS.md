@@ -102,6 +102,50 @@ Sistema completo para analizar órdenes pendientes y generar accionables automá
 
 ---
 
+### **FILTRO 8: Seller a tiempo de enviar (US)**
+**Condiciones:**
+- `Order Status + Aux (fso)`: in_process -
+- `order_type`: 3P
+- `Days since in process date` **< 6**
+- `Seller Country Iso`: US
+
+**Accionable:** `"Seller a tiempo de enviar"`
+
+---
+
+### **FILTRO 9: Seller a tiempo de enviar (CN)**
+**Condiciones:**
+- `Order Status + Aux (fso)`: in_process -
+- `order_type`: 3P
+- `Days since in process date` **< 4**
+- `Seller Country Iso`: CN
+
+**Accionable:** `"Seller a tiempo de enviar"`
+
+---
+
+### **FILTRO 10: Orden en condiciones para reasignar (US)**
+**Condiciones:**
+- `Order Status + Aux (fso)`: in_process -
+- `order_type`: 3P
+- `Days since in process date` **> 5**
+- `Seller Country Iso`: US
+
+**Accionable:** `"Orden en condiciones para reasignar"`
+
+---
+
+### **FILTRO 11: Orden en condiciones para reasignar (CN)**
+**Condiciones:**
+- `Order Status + Aux (fso)`: in_process -
+- `order_type`: 3P
+- `Days since in process date` **> 4**
+- `Seller Country Iso`: CN
+
+**Accionable:** `"Orden en condiciones para reasignar"`
+
+---
+
 ## 🔍 Auxiliar Accionable (Google Sheet)
 
 ### **¿Cuándo se aplica?**

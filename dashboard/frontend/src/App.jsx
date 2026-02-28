@@ -14,6 +14,9 @@ export default function App() {
   const [filtroAccionable, setFiltroAccionable] = useState('')
   const [filtroOrderType, setFiltroOrderType] = useState('')
   const [filtroMilestone, setFiltroMilestone] = useState('')
+  const [filtroOrderStatus, setFiltroOrderStatus] = useState('')
+  const [filtroMerchant, setFiltroMerchant] = useState('')
+  const [filtroDiasMin, setFiltroDiasMin] = useState('')
   const [loadingLast, setLoadingLast] = useState(true)
   const [redisOk, setRedisOk] = useState(null)
 
@@ -52,6 +55,9 @@ export default function App() {
       setFiltroAccionable('')
       setFiltroOrderType('')
       setFiltroMilestone('')
+      setFiltroOrderStatus('')
+      setFiltroMerchant('')
+      setFiltroDiasMin('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -65,12 +71,14 @@ export default function App() {
   }, [result])
 
   const opcionesFiltros = useMemo(() => {
-    if (!result?.tabla?.length) return { orderType: [], milestone: [], accionable: [] }
+    if (!result?.tabla?.length) return { orderType: [], milestone: [], accionable: [], orderStatus: [], merchant: [] }
     const rows = result.tabla
     const orderType = [...new Set(rows.map((r) => String(r['order_type'] || '').trim()).filter(Boolean))].sort()
     const milestone = [...new Set(rows.map((r) => String(r['Logistics Milestone'] || '').trim()).filter(Boolean))].sort()
     const accionable = [...new Set(rows.map((r) => String(r['Accionables'] || '').trim()).filter(Boolean))].sort()
-    return { orderType, milestone, accionable }
+    const orderStatus = [...new Set(rows.map((r) => String(r['Order Status + Aux (fso)'] || '').trim()).filter(Boolean))].sort()
+    const merchant = [...new Set(rows.map((r) => String(r['Merchant Name'] || '').trim()).filter(Boolean))].sort()
+    return { orderType, milestone, accionable, orderStatus, merchant }
   }, [result])
 
   const tablaFiltrada = useMemo(() => {
@@ -85,6 +93,22 @@ export default function App() {
     if (filtroAccionable) {
       rows = rows.filter((r) => String(r['Accionables'] || '').trim() === filtroAccionable)
     }
+    if (filtroOrderStatus) {
+      rows = rows.filter((r) => String(r['Order Status + Aux (fso)'] || '').trim() === filtroOrderStatus)
+    }
+    if (filtroMerchant) {
+      rows = rows.filter((r) => String(r['Merchant Name'] || '').trim() === filtroMerchant)
+    }
+    if (filtroDiasMin.trim()) {
+      const minDias = parseInt(filtroDiasMin, 10)
+      if (!isNaN(minDias)) {
+        rows = rows.filter((r) => {
+          const v = r['Days since in process date']
+          const n = parseInt(String(v).replace(/\D/g, ''), 10)
+          return !isNaN(n) && n >= minDias
+        })
+      }
+    }
     if (filtroTabla.trim()) {
       const q = filtroTabla.toLowerCase()
       rows = rows.filter((r) =>
@@ -92,14 +116,17 @@ export default function App() {
       )
     }
     return rows
-  }, [result, filtroTabla, filtroAccionable, filtroOrderType, filtroMilestone])
+  }, [result, filtroTabla, filtroAccionable, filtroOrderType, filtroMilestone, filtroOrderStatus, filtroMerchant, filtroDiasMin])
 
-  const hayFiltrosActivos = filtroTabla || filtroAccionable || filtroOrderType || filtroMilestone
+  const hayFiltrosActivos = filtroTabla || filtroAccionable || filtroOrderType || filtroMilestone || filtroOrderStatus || filtroMerchant || filtroDiasMin
   const limpiarFiltros = () => {
     setFiltroTabla('')
     setFiltroAccionable('')
     setFiltroOrderType('')
     setFiltroMilestone('')
+    setFiltroOrderStatus('')
+    setFiltroMerchant('')
+    setFiltroDiasMin('')
   }
 
   return (
@@ -226,6 +253,36 @@ export default function App() {
                   <option key={v} value={v}>{v}</option>
                 ))}
               </select>
+              <select
+                value={filtroOrderStatus}
+                onChange={(e) => setFiltroOrderStatus(e.target.value)}
+                style={styles.select}
+                title="Order Status"
+              >
+                <option value="">Order Status (todos)</option>
+                {opcionesFiltros.orderStatus.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <select
+                value={filtroMerchant}
+                onChange={(e) => setFiltroMerchant(e.target.value)}
+                style={styles.select}
+                title="Merchant"
+              >
+                <option value="">Merchant (todos)</option>
+                {opcionesFiltros.merchant.map((v) => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={0}
+                placeholder="Días mín. en proceso"
+                value={filtroDiasMin}
+                onChange={(e) => setFiltroDiasMin(e.target.value)}
+                style={{ ...styles.input, width: 140 }}
+              />
               <input
                 type="text"
                 placeholder="Buscar en toda la tabla..."

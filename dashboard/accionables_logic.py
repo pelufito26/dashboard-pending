@@ -141,6 +141,26 @@ def _generar_accionable_row(row, fecha_hoy):
             if track_17 in ['OutForDelivery - OutForDelivery_Other', 'InTransit - InTransit_Other', 'InTransit - InTransit_PickedUp', 'Exception - Exception_Delayed']:
                 accionables.append('Entrega fecha futura')
 
+    # Filtros 8-11: 3P in_process por país y días
+    order_status = str(row.get('Order Status + Aux (fso)', '')).strip()
+    order_type = str(row.get('order_type', '')).strip().upper()
+    seller_country = str(row.get('Seller Country Iso', '')).strip().upper()
+    days_raw = row.get('Days since in process date')
+    try:
+        days = int(float(str(days_raw).replace(',', '.'))) if pd.notna(days_raw) and str(days_raw).strip() != '' else None
+    except (ValueError, TypeError):
+        days = None
+
+    if order_type == '3P' and order_status == 'in_process -' and days is not None and seller_country:
+        if seller_country == 'US' and days < 6:
+            accionables.append('Seller a tiempo de enviar')
+        elif seller_country == 'CN' and days < 4:
+            accionables.append('Seller a tiempo de enviar')
+        elif seller_country == 'US' and days > 5:
+            accionables.append('Orden en condiciones para reasignar')
+        elif seller_country == 'CN' and days > 4:
+            accionables.append('Orden en condiciones para reasignar')
+
     return ' | '.join(accionables) if accionables else ''
 
 
