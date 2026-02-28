@@ -1,22 +1,28 @@
 import { useState, useMemo, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
 
 const API_BASE = '/api'
 
-const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#22c55e', '#eab308', '#f97316', '#ec4899']
+const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#22c55e', '#eab308', '#f97316', '#ec4899', '#14b8a6', '#f43f5e']
+
+// Merchant generales: agrupar cuentas (Meli = 4, Walmart = 3, resto por nombre)
+const MERCHANT_GRUPOS = {
+  Meli: ['MELI_TIER_ONE', 'MeLiUS_Standard', 'MercadoLibre', 'MercadoLibreUY'],
+  Walmart: ['Walmart', 'WalmartCN', 'WalmartUSCL'],
+}
+function merchantGeneral(name) {
+  const n = (name || '').trim()
+  for (const [general, cuentas] of Object.entries(MERCHANT_GRUPOS)) {
+    if (cuentas.some((c) => c.toLowerCase() === n.toLowerCase())) return general
+  }
+  return n || 'Sin merchant'
+}
 
 export default function App() {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [result, setResult] = useState(null)
-  const [filtroTabla, setFiltroTabla] = useState('')
-  const [filtroAccionable, setFiltroAccionable] = useState('')
-  const [filtroOrderType, setFiltroOrderType] = useState('')
-  const [filtroMilestone, setFiltroMilestone] = useState('')
-  const [filtroOrderStatus, setFiltroOrderStatus] = useState('')
-  const [filtroMerchant, setFiltroMerchant] = useState('')
-  const [filtroDiasMin, setFiltroDiasMin] = useState('')
   const [loadingLast, setLoadingLast] = useState(true)
   const [redisOk, setRedisOk] = useState(null)
 
@@ -51,13 +57,6 @@ export default function App() {
       }
       const data = await res.json()
       setResult(data)
-      setFiltroTabla('')
-      setFiltroAccionable('')
-      setFiltroOrderType('')
-      setFiltroMilestone('')
-      setFiltroOrderStatus('')
-      setFiltroMerchant('')
-      setFiltroDiasMin('')
     } catch (err) {
       setError(err.message)
     } finally {
@@ -67,67 +66,53 @@ export default function App() {
 
   const chartData = useMemo(() => {
     if (!result?.stats?.distribucion_accionables) return []
-    return Object.entries(result.stats.distribucion_accionables).map(([name, count]) => ({ name, count }))
+    return Object.entries(result.stats.distribucion_accionables).map(([name, count]) => ({ name, value: count }))
   }, [result])
 
-  const opcionesFiltros = useMemo(() => {
-    if (!result?.tabla?.length) return { orderType: [], milestone: [], accionable: [], orderStatus: [], merchant: [] }
-    const rows = result.tabla
-    const orderType = [...new Set(rows.map((r) => String(r['order_type'] || '').trim()).filter(Boolean))].sort()
-    const milestone = [...new Set(rows.map((r) => String(r['Logistics Milestone'] || '').trim()).filter(Boolean))].sort()
-    const accionable = [...new Set(rows.map((r) => String(r['Accionables'] || '').trim()).filter(Boolean))].sort()
-    const orderStatus = [...new Set(rows.map((r) => String(r['Order Status + Aux (fso)'] || '').trim()).filter(Boolean))].sort()
-    const merchant = [...new Set(rows.map((r) => String(r['Merchant Name'] || '').trim()).filter(Boolean))].sort()
-    return { orderType, milestone, accionable, orderStatus, merchant }
+  const merchantGeneralData = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    const counts = {}
+    for (const row of result.tabla) {
+      const g = merchantGeneral(row['Merchant Name'])
+      counts[g] = (counts[g] || 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, value: count }))
+      .sort((a, b) => b.value - a.value)
   }, [result])
 
-  const tablaFiltrada = useMemo(() => {
-    if (!result?.tabla) return []
-    let rows = result.tabla
-    if (filtroOrderType) {
-      rows = rows.filter((r) => String(r['order_type'] || '').trim() === filtroOrderType)
+  const ageingBucket = (row) => {
+    const col = 'Ageing Buckets (in_process_date)'
+    const raw = row[col]
+    if (raw != null && String(raw).trim() !== '') return String(raw).trim()
+    const daysRaw = row['Days since in process date']
+    let d
+    try {
+      d = parseInt(String(daysRaw).replace(/\D/g, ''), 10)
+    } catch {
+      return 'Sin datos'
     }
-    if (filtroMilestone) {
-      rows = rows.filter((r) => String(r['Logistics Milestone'] || '').trim() === filtroMilestone)
-    }
-    if (filtroAccionable) {
-      rows = rows.filter((r) => String(r['Accionables'] || '').trim() === filtroAccionable)
-    }
-    if (filtroOrderStatus) {
-      rows = rows.filter((r) => String(r['Order Status + Aux (fso)'] || '').trim() === filtroOrderStatus)
-    }
-    if (filtroMerchant) {
-      rows = rows.filter((r) => String(r['Merchant Name'] || '').trim() === filtroMerchant)
-    }
-    if (filtroDiasMin.trim()) {
-      const minDias = parseInt(filtroDiasMin, 10)
-      if (!isNaN(minDias)) {
-        rows = rows.filter((r) => {
-          const v = r['Days since in process date']
-          const n = parseInt(String(v).replace(/\D/g, ''), 10)
-          return !isNaN(n) && n >= minDias
-        })
-      }
-    }
-    if (filtroTabla.trim()) {
-      const q = filtroTabla.toLowerCase()
-      rows = rows.filter((r) =>
-        Object.values(r).some((v) => String(v).toLowerCase().includes(q))
-      )
-    }
-    return rows
-  }, [result, filtroTabla, filtroAccionable, filtroOrderType, filtroMilestone, filtroOrderStatus, filtroMerchant, filtroDiasMin])
-
-  const hayFiltrosActivos = filtroTabla || filtroAccionable || filtroOrderType || filtroMilestone || filtroOrderStatus || filtroMerchant || filtroDiasMin
-  const limpiarFiltros = () => {
-    setFiltroTabla('')
-    setFiltroAccionable('')
-    setFiltroOrderType('')
-    setFiltroMilestone('')
-    setFiltroOrderStatus('')
-    setFiltroMerchant('')
-    setFiltroDiasMin('')
+    if (isNaN(d)) return 'Sin datos'
+    if (d <= 3) return '0-3 días'
+    if (d <= 6) return '4-6 días'
+    if (d <= 14) return '7-14 días'
+    return '15+ días'
   }
+
+  const ageingData = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    const counts = {}
+    for (const row of result.tabla) {
+      const b = ageingBucket(row)
+      counts[b] = (counts[b] || 0) + 1
+    }
+    const order = ['0-3 días', '4-6 días', '7-14 días', '15+ días', 'Sin datos']
+    const ordered = order.filter((b) => counts[b]).map((name) => ({ name, value: counts[name] }))
+    const rest = Object.keys(counts)
+      .filter((b) => !order.includes(b))
+      .map((name) => ({ name, value: counts[name] }))
+    return ordered.concat(rest)
+  }, [result])
 
   return (
     <div style={styles.container}>
@@ -198,131 +183,91 @@ export default function App() {
               <h2 style={styles.sectionTitle}>Distribución de accionables</h2>
               <div style={styles.chartWrap}>
                 <ResponsiveContainer width="100%" height={360}>
-                  <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 40 }}>
-                    <XAxis type="number" stroke="var(--text-muted)" fontSize={12} />
-                    <YAxis type="category" dataKey="name" width={220} stroke="var(--text-muted)" fontSize={11} tick={{ fill: 'var(--text)' }} />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
-                      labelStyle={{ color: 'var(--text)' }}
-                      formatter={(value) => [value, 'Órdenes']}
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]}>
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
                       {chartData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
-                    </Bar>
-                  </BarChart>
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      formatter={(value) => [value, 'Órdenes']}
+                    />
+                    <Legend />
+                  </PieChart>
                 </ResponsiveContainer>
               </div>
             </section>
           )}
 
-          <section style={styles.tableSection}>
-            <h2 style={styles.sectionTitle}>Tabla de órdenes</h2>
-            <div style={styles.filters}>
-              <select
-                value={filtroOrderType}
-                onChange={(e) => setFiltroOrderType(e.target.value)}
-                style={styles.select}
-                title="Order type"
-              >
-                <option value="">Order type (todos)</option>
-                {opcionesFiltros.orderType.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
-              <select
-                value={filtroMilestone}
-                onChange={(e) => setFiltroMilestone(e.target.value)}
-                style={styles.select}
-                title="Logistics Milestone"
-              >
-                <option value="">Logistics Milestone (todos)</option>
-                {opcionesFiltros.milestone.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
-              <select
-                value={filtroAccionable}
-                onChange={(e) => setFiltroAccionable(e.target.value)}
-                style={styles.select}
-                title="Accionable"
-              >
-                <option value="">Accionable (todos)</option>
-                {opcionesFiltros.accionable.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
-              <select
-                value={filtroOrderStatus}
-                onChange={(e) => setFiltroOrderStatus(e.target.value)}
-                style={styles.select}
-                title="Order Status"
-              >
-                <option value="">Order Status (todos)</option>
-                {opcionesFiltros.orderStatus.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
-              <select
-                value={filtroMerchant}
-                onChange={(e) => setFiltroMerchant(e.target.value)}
-                style={styles.select}
-                title="Merchant"
-              >
-                <option value="">Merchant (todos)</option>
-                {opcionesFiltros.merchant.map((v) => (
-                  <option key={v} value={v}>{v}</option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min={0}
-                placeholder="Días mín. en proceso"
-                value={filtroDiasMin}
-                onChange={(e) => setFiltroDiasMin(e.target.value)}
-                style={{ ...styles.input, width: 140 }}
-              />
-              <input
-                type="text"
-                placeholder="Buscar en toda la tabla..."
-                value={filtroTabla}
-                onChange={(e) => setFiltroTabla(e.target.value)}
-                style={styles.input}
-              />
-              {hayFiltrosActivos && (
-                <button type="button" onClick={limpiarFiltros} style={styles.btnLimpiar}>
-                  Limpiar filtros
-                </button>
-              )}
-            </div>
-            {hayFiltrosActivos && (
-              <p style={styles.muted}>Mostrando {tablaFiltrada.length} filas (filtros activos).</p>
-            )}
-            <div style={styles.tableWrap}>
-              <table style={styles.table}>
-                <thead>
-                  <tr>
-                    {result.tabla?.length && Object.keys(result.tabla[0]).map((k) => (
-                      <th key={k} style={styles.th}>{k}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {tablaFiltrada.slice(0, 500).map((row, i) => (
-                    <tr key={i} style={styles.tr}>
-                      {Object.entries(row).map(([k, v]) => (
-                        <td key={k} style={styles.td}>{String(v)}</td>
+          {merchantGeneralData.length > 0 && (
+            <section style={styles.chartSection}>
+              <h2 style={styles.sectionTitle}>Distribución por Merchant generales</h2>
+              <p style={styles.muted}>Meli = MELI_TIER_ONE, MeLiUS_Standard, MercadoLibre, MercadoLibreUY · Walmart = Walmart, WalmartCN, WalmartUSCL</p>
+              <div style={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <PieChart>
+                    <Pie
+                      data={merchantGeneralData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {merchantGeneralData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {tablaFiltrada.length > 500 && (
-              <p style={styles.muted}>Mostrando 500 de {tablaFiltrada.length} filas. Usá los filtros para acotar.</p>
-            )}
-          </section>
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      formatter={(value) => [value, 'Órdenes']}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {ageingData.length > 0 && (
+            <section style={styles.chartSection}>
+              <h2 style={styles.sectionTitle}>Distribución por Ageing Buckets (in_process_date)</h2>
+              <div style={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={360}>
+                  <PieChart>
+                    <Pie
+                      data={ageingData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {ageingData.map((_, i) => (
+                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      formatter={(value) => [value, 'Órdenes']}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
         </>
       )}
     </div>

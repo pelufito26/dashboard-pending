@@ -81,7 +81,7 @@ async def _process_file_impl(file: UploadFile):
         "Order Id", "order_type", "Order Status + Aux (fso)", "Logistics Milestone",
         "Accionables", "eta_amazon_delivery_date", "Scraped Eta Amazon",
         "Merchant Name", "last status - status_aux 17track", "Days since in process date",
-        "Seller Country Iso"
+        "Seller Country Iso", "Ageing Buckets (in_process_date)"
     ]
     existentes = [c for c in columnas_export if c in df_result.columns]
     tabla = df_result[existentes].fillna("").astype(str).to_dict(orient="records")

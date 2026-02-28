@@ -158,7 +158,7 @@ def _generar_accionable_row(row, fecha_hoy):
             accionables.append('Seller a tiempo de enviar')
         elif seller_country == 'US' and days > 5:
             accionables.append('Orden en condiciones para reasignar')
-        elif seller_country == 'CN' and days > 4:
+        elif seller_country == 'CN' and days >= 4:
             accionables.append('Orden en condiciones para reasignar')
 
     return ' | '.join(accionables) if accionables else ''

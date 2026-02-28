@@ -139,7 +139,7 @@ Sistema completo para analizar órdenes pendientes y generar accionables automá
 **Condiciones:**
 - `Order Status + Aux (fso)`: in_process -
 - `order_type`: 3P
-- `Days since in process date` **> 4**
+- `Days since in process date` **>= 4**
 - `Seller Country Iso`: CN
 
 **Accionable:** `"Orden en condiciones para reasignar"`
