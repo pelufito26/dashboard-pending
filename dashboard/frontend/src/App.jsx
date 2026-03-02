@@ -3,12 +3,22 @@ import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recha
 
 const API_BASE = '/api'
 
-const COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#22c55e', '#eab308', '#f97316', '#ec4899', '#14b8a6', '#f43f5e']
+// Paleta azul y blanco (tonalidades claras para buena lectura)
+const COLORS = [
+  '#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff',
+  '#0ea5e9', '#0284c7', '#0369a1', '#1d4ed8',
+]
 
-// Merchant generales: agrupar cuentas (Meli = 4, Walmart = 3, resto por nombre)
+// Merchant generales: agrupar cuentas (Meli, Walmart, Fravega, etc.)
 const MERCHANT_GRUPOS = {
   Meli: ['MELI_TIER_ONE', 'MeLiUS_Standard', 'MercadoLibre', 'MercadoLibreUY'],
   Walmart: ['Walmart', 'WalmartCN', 'WalmartUSCL'],
+  Fravega: ['FravegaUS', 'FravegaCN'],
+  Carrefour: ['Carrefour', 'CarrefourCN'],
+  ViaVarejo: ['ViaVarejo', 'ViaVarejoCN'],
+  MagaluCBT: ['MagaluCBTUS', 'MagaluCBTCN'],
+  Megatone: ['MegatoneUS', 'MegatoneCN'],
+  Coppel: ['CoppelUS', 'CoppelCN'],
 }
 function merchantGeneral(name) {
   const n = (name || '').trim()
@@ -25,6 +35,7 @@ export default function App() {
   const [result, setResult] = useState(null)
   const [loadingLast, setLoadingLast] = useState(true)
   const [redisOk, setRedisOk] = useState(null)
+  const [merchantChartFilter, setMerchantChartFilter] = useState('total') // 'total' | '2P' | '3P'
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
@@ -71,15 +82,21 @@ export default function App() {
 
   const merchantGeneralData = useMemo(() => {
     if (!result?.tabla?.length) return []
+    let rows = result.tabla
+    if (merchantChartFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === merchantChartFilter
+      )
+    }
     const counts = {}
-    for (const row of result.tabla) {
+    for (const row of rows) {
       const g = merchantGeneral(row['Merchant Name'])
       counts[g] = (counts[g] || 0) + 1
     }
     return Object.entries(counts)
       .map(([name, count]) => ({ name, value: count }))
       .sort((a, b) => b.value - a.value)
-  }, [result])
+  }, [result, merchantChartFilter])
 
   const ageingBucket = (row) => {
     const col = 'Ageing Buckets (in_process_date)'
@@ -191,16 +208,19 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
+                      stroke="#fff"
+                      strokeWidth={1.5}
                     >
                       {chartData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                       formatter={(value) => [value, 'Órdenes']}
+                      labelStyle={{ color: 'var(--text)' }}
                     />
-                    <Legend />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -209,8 +229,22 @@ export default function App() {
 
           {merchantGeneralData.length > 0 && (
             <section style={styles.chartSection}>
-              <h2 style={styles.sectionTitle}>Distribución por Merchant generales</h2>
-              <p style={styles.muted}>Meli = MELI_TIER_ONE, MeLiUS_Standard, MercadoLibre, MercadoLibreUY · Walmart = Walmart, WalmartCN, WalmartUSCL</p>
+              <div style={styles.chartHeader}>
+                <h2 style={styles.sectionTitle}>Distribución por Merchant</h2>
+                <select
+                  value={merchantChartFilter}
+                  onChange={(e) => setMerchantChartFilter(e.target.value)}
+                  style={styles.select}
+                  aria-label="Filtrar por tipo de orden"
+                >
+                  <option value="total">Total</option>
+                  <option value="2P">2P</option>
+                  <option value="3P">3P</option>
+                </select>
+              </div>
+              <p style={styles.muted}>
+                Agrupados: Meli, Walmart, Fravega (US+CN), Carrefour (+CN), ViaVarejo (+CN), MagaluCBT (US+CN), Megatone (US+CN), Coppel (US+CN)
+              </p>
               <div style={styles.chartWrap}>
                 <ResponsiveContainer width="100%" height={360}>
                   <PieChart>
@@ -221,16 +255,19 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
+                      stroke="#fff"
+                      strokeWidth={1.5}
                     >
                       {merchantGeneralData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                       formatter={(value) => [value, 'Órdenes']}
+                      labelStyle={{ color: 'var(--text)' }}
                     />
-                    <Legend />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -250,16 +287,19 @@ export default function App() {
                       cx="50%"
                       cy="50%"
                       outerRadius={120}
+                      stroke="#fff"
+                      strokeWidth={1.5}
                     >
                       {ageingData.map((_, i) => (
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}
+                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
                       formatter={(value) => [value, 'Órdenes']}
+                      labelStyle={{ color: 'var(--text)' }}
                     />
-                    <Legend />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
@@ -349,10 +389,17 @@ const styles = {
   chartSection: {
     marginBottom: '2rem',
   },
+  chartHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+    flexWrap: 'wrap',
+    marginBottom: '0.5rem',
+  },
   sectionTitle: {
     fontSize: '1.1rem',
     fontWeight: 600,
-    margin: '0 0 1rem',
+    margin: 0,
   },
   chartWrap: {
     background: 'var(--surface)',
