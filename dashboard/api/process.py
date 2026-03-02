@@ -77,6 +77,26 @@ async def _process_file_impl(file: UploadFile):
     except Exception as e:
         raise HTTPException(500, f"Error al procesar accionables: {str(e)}")
 
+    # Aplicar filtro: solo órdenes con milestone válido (1.1 - First Mile: Seller y 1.2 - Already with seller_delivered_at)
+    milestones_permitidos = ["1.1 - First Mile: Seller", "1.2 - Already with seller_delivered_at"]
+    col_lm = "Logistics Milestone"
+    if col_lm in df_result.columns:
+        df_result = df_result[df_result[col_lm].astype(str).str.strip().isin(milestones_permitidos)].copy()
+    # Recalcular stats sobre el universo filtrado
+    ordenes_con_acc = int((df_result["Accionables"].astype(str).str.strip() != "").sum()) if "Accionables" in df_result.columns else 0
+    all_acc = []
+    if "Accionables" in df_result.columns and ordenes_con_acc > 0:
+        for acc in df_result.loc[df_result["Accionables"].astype(str).str.strip() != "", "Accionables"]:
+            all_acc.extend(str(acc).split(" | "))
+    distribucion = pd.Series(all_acc).value_counts().to_dict() if all_acc else {}
+    stats = {
+        "ordenes_totales": len(df_result),
+        "ordenes_milestone_valido": len(df_result),
+        "ordenes_con_accionables": ordenes_con_acc,
+        "distribucion_accionables": distribucion,
+        "fecha_analisis": stats["fecha_analisis"],
+    }
+
     columnas_export = [
         "Order Id", "order_type", "Order Status + Aux (fso)", "Logistics Milestone",
         "Accionables", "eta_amazon_delivery_date", "Scraped Eta Amazon",

@@ -84,6 +84,7 @@ export default function App() {
   const [accionablesChartFilter, setAccionablesChartFilter] = useState('total') // 'total' | '2P' | '3P'
   const [lateMeliFilter, setLateMeliFilter] = useState('total')
   const [lateAllFilter, setLateAllFilter] = useState('total')
+  const [showLateByAgeing, setShowLateByAgeing] = useState(false) // casilla: true = columnas por Ageing, false = torta general
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
@@ -204,8 +205,48 @@ export default function App() {
 
   const isLate = (row) => String(row['SLA per mile'] || '').trim().toLowerCase() === 'late'
 
-  // Órdenes Late - Solo Meli: SLA per mile = "late" y merchant Meli (y sus cuentas)
+  // Órdenes Late - Solo Meli: distribución global por comentarios (sin Ageing)
   const lateMeliData = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    let rows = result.tabla.filter(
+      (row) => isLate(row) && merchantGeneral(row['Merchant Name']) === 'Meli'
+    )
+    if (lateMeliFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === lateMeliFilter
+      )
+    }
+    const counts = {}
+    for (const row of rows) {
+      const a = String(row['Accionables'] || '').trim() || 'Sin comentario'
+      counts[a] = (counts[a] || 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [result, lateMeliFilter])
+
+  // Órdenes Late - Todos los merchants: distribución global por comentarios (sin Ageing)
+  const lateAllData = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    let rows = result.tabla.filter(isLate)
+    if (lateAllFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === lateAllFilter
+      )
+    }
+    const counts = {}
+    for (const row of rows) {
+      const a = String(row['Accionables'] || '').trim() || 'Sin comentario'
+      counts[a] = (counts[a] || 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [result, lateAllFilter])
+
+  // Órdenes Late - datos por Ageing (para cuando la casilla "Separar por Ageing" está tildada)
+  const lateMeliDataByAgeing = useMemo(() => {
     if (!result?.tabla?.length) return { data: [], commentKeys: [] }
     let rows = result.tabla.filter(
       (row) => isLate(row) && merchantGeneral(row['Merchant Name']) === 'Meli'
@@ -218,8 +259,7 @@ export default function App() {
     return buildBucketCommentData(rows)
   }, [result, lateMeliFilter])
 
-  // Órdenes Late - Todos los merchants: SLA per mile = "late"
-  const lateAllData = useMemo(() => {
+  const lateAllDataByAgeing = useMemo(() => {
     if (!result?.tabla?.length) return { data: [], commentKeys: [] }
     let rows = result.tabla.filter(isLate)
     if (lateAllFilter !== 'total') {
@@ -293,9 +333,13 @@ export default function App() {
               <div style={styles.cardValueSmall}>{result.stats.fecha_analisis}</div>
             </div>
           </section>
+          <p style={styles.milestoneNote}>
+            Milestones válidos: <strong>1.1 - First Mile: Seller</strong> y <strong>1.2 - Already with seller_delivered_at</strong>. Todos los datos del tablero aplican solo a órdenes con estos milestones.
+          </p>
 
+          <div className="dashboard-pie-grid">
           {chartData.length > 0 && (
-            <section style={styles.chartSection}>
+            <section style={styles.chartSection} className="dashboard-card-tile">
               <div style={styles.chartHeader}>
                 <h2 style={styles.sectionTitle}>Distribución de accionables</h2>
                 <select
@@ -309,8 +353,8 @@ export default function App() {
                   <option value="3P">3P</option>
                 </select>
               </div>
-              <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={360}>
+              <div style={styles.chartWrap} className="chart-tile-inner">
+                <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
                     <Pie
                       data={chartData}
@@ -318,7 +362,7 @@ export default function App() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={120}
+                      outerRadius={110}
                       stroke="#fff"
                       strokeWidth={1.5}
                     >
@@ -335,7 +379,7 @@ export default function App() {
           )}
 
           {merchantGeneralData.length > 0 && (
-            <section style={styles.chartSection}>
+            <section style={styles.chartSection} className="dashboard-card-tile">
               <div style={styles.chartHeader}>
                 <h2 style={styles.sectionTitle}>Distribución por Merchant</h2>
                 <select
@@ -350,10 +394,10 @@ export default function App() {
                 </select>
               </div>
               <p style={styles.muted}>
-                Agrupados: Meli, Walmart, Fravega (US+CN), Carrefour (+CN), ViaVarejo (+CN), MagaluCBT (US+CN), Megatone (US+CN), Coppel (US+CN)
+                Meli, Walmart, Fravega, Carrefour, ViaVarejo, MagaluCBT, Megatone, Coppel (agrupados)
               </p>
-              <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={360}>
+              <div style={styles.chartWrap} className="chart-tile-inner">
+                <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
                     <Pie
                       data={merchantGeneralData}
@@ -361,7 +405,7 @@ export default function App() {
                       nameKey="name"
                       cx="50%"
                       cy="50%"
-                      outerRadius={120}
+                      outerRadius={110}
                       stroke="#fff"
                       strokeWidth={1.5}
                     >
@@ -377,8 +421,25 @@ export default function App() {
             </section>
           )}
 
-          {lateMeliData.data.length > 0 && lateMeliData.commentKeys.length > 0 && (
-            <section style={styles.chartSection}>
+          {(lateMeliData.length > 0 || lateAllData.length > 0) && (
+            <section style={styles.chartSection} className="dashboard-bar-full">
+              <label style={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  checked={showLateByAgeing}
+                  onChange={(e) => setShowLateByAgeing(e.target.checked)}
+                  style={styles.checkbox}
+                />
+                <span>Separar por Ageing</span>
+              </label>
+            </section>
+          )}
+
+          {lateMeliData.length > 0 && (
+            <section
+              style={styles.chartSection}
+              className={showLateByAgeing && lateMeliDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
+            >
               <div style={styles.chartHeader}>
                 <h2 style={styles.sectionTitle}>Órdenes Late – Solo Meli</h2>
                 <select
@@ -392,43 +453,73 @@ export default function App() {
                   <option value="3P">3P</option>
                 </select>
               </div>
-              <p style={styles.muted}>SLA per mile = &quot;late&quot;, merchant Meli (y sus cuentas). Comentarios por Ageing Buckets.</p>
-              <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart
-                    data={lateMeliData.data}
-                    margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: 'var(--text)', fontSize: 12 }}
-                      angle={-35}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
-                    <Tooltip content={<BarChartTooltip commentKeys={lateMeliData.commentKeys} />} />
-                    <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
-                    {lateMeliData.commentKeys.map((key, i) => (
-                      <Bar
-                        key={key}
-                        dataKey={key}
-                        name={key}
-                        stackId="a"
-                        fill={COLORS[i % COLORS.length]}
-                        stroke="#fff"
-                        strokeWidth={0.5}
+              <p style={styles.muted}>
+                {showLateByAgeing
+                  ? 'SLA per mile = "late", merchant Meli. Comentarios por Ageing Buckets.'
+                  : 'SLA per mile = "late", merchant Meli (y sus cuentas). Distribución por comentarios.'}
+              </p>
+              <div style={styles.chartWrap} className={showLateByAgeing && lateMeliDataByAgeing.data.length > 0 ? '' : 'chart-tile-inner'}>
+                {showLateByAgeing && lateMeliDataByAgeing.data.length > 0 && lateMeliDataByAgeing.commentKeys.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={380}>
+                    <BarChart
+                      data={lateMeliDataByAgeing.data}
+                      margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: 'var(--text)', fontSize: 12 }}
+                        angle={-35}
+                        textAnchor="end"
+                        height={60}
                       />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                      <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
+                      <Tooltip content={<BarChartTooltip commentKeys={lateMeliDataByAgeing.commentKeys} />} />
+                      <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
+                      {lateMeliDataByAgeing.commentKeys.map((key, i) => (
+                        <Bar
+                          key={key}
+                          dataKey={key}
+                          name={key}
+                          stackId="a"
+                          fill={COLORS[i % COLORS.length]}
+                          stroke="#fff"
+                          strokeWidth={0.5}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <PieChart>
+                      <Pie
+                        data={lateMeliData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={110}
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                      >
+                        {lateMeliData.map((_, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                      <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </section>
           )}
 
-          {lateAllData.data.length > 0 && lateAllData.commentKeys.length > 0 && (
-            <section style={styles.chartSection}>
+          {lateAllData.length > 0 && (
+            <section
+              style={styles.chartSection}
+              className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
+            >
               <div style={styles.chartHeader}>
                 <h2 style={styles.sectionTitle}>Órdenes Late – Todos los merchants</h2>
                 <select
@@ -442,43 +533,71 @@ export default function App() {
                   <option value="3P">3P</option>
                 </select>
               </div>
-              <p style={styles.muted}>SLA per mile = &quot;late&quot;. Comentarios por Ageing Buckets.</p>
-              <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart
-                    data={lateAllData.data}
-                    margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis
-                      dataKey="name"
-                      tick={{ fill: 'var(--text)', fontSize: 12 }}
-                      angle={-35}
-                      textAnchor="end"
-                      height={60}
-                    />
-                    <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
-                    <Tooltip content={<BarChartTooltip commentKeys={lateAllData.commentKeys} />} />
-                    <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
-                    {lateAllData.commentKeys.map((key, i) => (
-                      <Bar
-                        key={key}
-                        dataKey={key}
-                        name={key}
-                        stackId="a"
-                        fill={COLORS[i % COLORS.length]}
-                        stroke="#fff"
-                        strokeWidth={0.5}
+              <p style={styles.muted}>
+                {showLateByAgeing
+                  ? 'SLA per mile = "late". Comentarios por Ageing Buckets.'
+                  : 'SLA per mile = "late". Distribución por comentarios.'}
+              </p>
+              <div style={styles.chartWrap} className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? '' : 'chart-tile-inner'}>
+                {showLateByAgeing && lateAllDataByAgeing.data.length > 0 && lateAllDataByAgeing.commentKeys.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={380}>
+                    <BarChart
+                      data={lateAllDataByAgeing.data}
+                      margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                      <XAxis
+                        dataKey="name"
+                        tick={{ fill: 'var(--text)', fontSize: 12 }}
+                        angle={-35}
+                        textAnchor="end"
+                        height={60}
                       />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
+                      <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
+                      <Tooltip content={<BarChartTooltip commentKeys={lateAllDataByAgeing.commentKeys} />} />
+                      <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
+                      {lateAllDataByAgeing.commentKeys.map((key, i) => (
+                        <Bar
+                          key={key}
+                          dataKey={key}
+                          name={key}
+                          stackId="a"
+                          fill={COLORS[i % COLORS.length]}
+                          stroke="#fff"
+                          strokeWidth={0.5}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <ResponsiveContainer width="100%" height={320}>
+                    <PieChart>
+                      <Pie
+                        data={lateAllData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={110}
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                      >
+                        {lateAllData.map((_, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                      <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </section>
           )}
+          </div>
 
           {ageingByCommentData.data.length > 0 && ageingByCommentData.commentKeys.length > 0 && (
-            <section style={styles.chartSection}>
+            <section style={styles.chartSectionWide}>
               <div style={styles.chartHeader}>
                 <h2 style={styles.sectionTitle}>Comentarios por Ageing Buckets (in_process_date)</h2>
                 <select
@@ -493,8 +612,8 @@ export default function App() {
                 </select>
               </div>
               <p style={styles.muted}>Eje horizontal: Ageing Buckets. Barras: cantidad de órdenes por comentario/accionable.</p>
-              <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={400}>
+              <div style={styles.chartWrapWide}>
+                <ResponsiveContainer width="100%" height={440}>
                   <BarChart
                     data={ageingByCommentData.data}
                     margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
@@ -534,9 +653,9 @@ export default function App() {
 
 const styles = {
   container: {
-    maxWidth: 1200,
+    maxWidth: 1400,
     margin: '0 auto',
-    padding: '2rem 1.5rem',
+    padding: 'clamp(1rem, 4vw, 2rem)',
   },
   header: {
     marginBottom: '2rem',
@@ -582,15 +701,16 @@ const styles = {
   },
   cards: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
     gap: '1rem',
-    marginBottom: '2rem',
+    marginBottom: '1.5rem',
   },
   card: {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
     borderRadius: 'var(--card-radius)',
     padding: '1.25rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
   cardLabel: {
     color: 'var(--text-muted)',
@@ -627,6 +747,18 @@ const styles = {
     border: '1px solid var(--border)',
     borderRadius: 'var(--card-radius)',
     padding: '1rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  },
+  chartSectionWide: {
+    marginBottom: '2rem',
+    width: '100%',
+  },
+  chartWrapWide: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--card-radius)',
+    padding: '1.25rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
   },
   tableSection: {
     marginBottom: '2rem',
@@ -699,5 +831,26 @@ const styles = {
     color: 'var(--text-muted)',
     fontSize: '0.85rem',
     marginTop: '0.5rem',
+  },
+  milestoneNote: {
+    color: 'var(--text-muted)',
+    fontSize: '0.85rem',
+    marginTop: '0.25rem',
+    marginBottom: '1.5rem',
+  },
+  checkboxLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    cursor: 'pointer',
+    color: 'var(--text)',
+    fontSize: '0.95rem',
+    marginBottom: '0.5rem',
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    cursor: 'pointer',
+    accentColor: 'var(--accent)',
   },
 }
