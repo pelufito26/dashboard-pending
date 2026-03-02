@@ -81,6 +81,9 @@ export default function App() {
   const [redisOk, setRedisOk] = useState(null)
   const [merchantChartFilter, setMerchantChartFilter] = useState('total') // 'total' | '2P' | '3P'
   const [ageingChartFilter, setAgeingChartFilter] = useState('total') // 'total' | '2P' | '3P'
+  const [accionablesChartFilter, setAccionablesChartFilter] = useState('total') // 'total' | '2P' | '3P'
+  const [lateMeliFilter, setLateMeliFilter] = useState('total')
+  const [lateAllFilter, setLateAllFilter] = useState('total')
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
@@ -121,9 +124,25 @@ export default function App() {
   }
 
   const chartData = useMemo(() => {
-    if (!result?.stats?.distribucion_accionables) return []
-    return Object.entries(result.stats.distribucion_accionables).map(([name, count]) => ({ name, value: count }))
-  }, [result])
+    if (!result?.tabla?.length && !result?.stats?.distribucion_accionables) return []
+    if (accionablesChartFilter === 'total' && result?.stats?.distribucion_accionables) {
+      return Object.entries(result.stats.distribucion_accionables).map(([name, count]) => ({ name, value: count }))
+    }
+    let rows = result.tabla || []
+    if (accionablesChartFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === accionablesChartFilter
+      )
+    }
+    const counts = {}
+    for (const row of rows) {
+      const a = String(row['Accionables'] || '').trim() || 'Sin comentario'
+      counts[a] = (counts[a] || 0) + 1
+    }
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+  }, [result, accionablesChartFilter])
 
   const merchantGeneralData = useMemo(() => {
     if (!result?.tabla?.length) return []
@@ -151,17 +170,9 @@ export default function App() {
     return 'Sin datos'
   }
 
-  // Datos para gráfico de columnas: Comentarios (Accionables) x Ageing Buckets, con filtro 2P/3P/Total
-  const ageingByCommentData = useMemo(() => {
-    if (!result?.tabla?.length) return { data: [], commentKeys: [] }
-    let rows = result.tabla
-    if (ageingChartFilter !== 'total') {
-      rows = rows.filter(
-        (row) => String(row['order_type'] || '').trim().toUpperCase() === ageingChartFilter
-      )
-    }
-    // Orden canónico de buckets según el campo Ageing Buckets (in_process_date)
-    const bucketOrder = ['3-5', '6-10', '11-20', '+20', 'Sin datos']
+  const bucketOrder = ['3-5', '6-10', '11-20', '+20', 'Sin datos']
+
+  const buildBucketCommentData = (rows) => {
     const byBucket = {}
     const commentSet = new Set()
     for (const row of rows) {
@@ -175,12 +186,49 @@ export default function App() {
     const orderedBuckets = bucketOrder.filter((b) => byBucket[b]).concat(
       Object.keys(byBucket).filter((b) => !bucketOrder.includes(b))
     )
-    const data = orderedBuckets.map((bucket) => {
-      const point = { name: bucket, ...byBucket[bucket] }
-      return point
-    })
+    const data = orderedBuckets.map((bucket) => ({ name: bucket, ...byBucket[bucket] }))
     return { data, commentKeys }
+  }
+
+  // Datos para gráfico de columnas: Comentarios (Accionables) x Ageing Buckets, con filtro 2P/3P/Total
+  const ageingByCommentData = useMemo(() => {
+    if (!result?.tabla?.length) return { data: [], commentKeys: [] }
+    let rows = result.tabla
+    if (ageingChartFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === ageingChartFilter
+      )
+    }
+    return buildBucketCommentData(rows)
   }, [result, ageingChartFilter])
+
+  const isLate = (row) => String(row['SLA per mile'] || '').trim().toLowerCase() === 'late'
+
+  // Órdenes Late - Solo Meli: SLA per mile = "late" y merchant Meli (y sus cuentas)
+  const lateMeliData = useMemo(() => {
+    if (!result?.tabla?.length) return { data: [], commentKeys: [] }
+    let rows = result.tabla.filter(
+      (row) => isLate(row) && merchantGeneral(row['Merchant Name']) === 'Meli'
+    )
+    if (lateMeliFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === lateMeliFilter
+      )
+    }
+    return buildBucketCommentData(rows)
+  }, [result, lateMeliFilter])
+
+  // Órdenes Late - Todos los merchants: SLA per mile = "late"
+  const lateAllData = useMemo(() => {
+    if (!result?.tabla?.length) return { data: [], commentKeys: [] }
+    let rows = result.tabla.filter(isLate)
+    if (lateAllFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === lateAllFilter
+      )
+    }
+    return buildBucketCommentData(rows)
+  }, [result, lateAllFilter])
 
   return (
     <div style={styles.container}>
@@ -248,7 +296,19 @@ export default function App() {
 
           {chartData.length > 0 && (
             <section style={styles.chartSection}>
-              <h2 style={styles.sectionTitle}>Distribución de accionables</h2>
+              <div style={styles.chartHeader}>
+                <h2 style={styles.sectionTitle}>Distribución de accionables</h2>
+                <select
+                  value={accionablesChartFilter}
+                  onChange={(e) => setAccionablesChartFilter(e.target.value)}
+                  style={styles.select}
+                  aria-label="Filtrar por tipo de orden"
+                >
+                  <option value="total">Total</option>
+                  <option value="2P">2P</option>
+                  <option value="3P">3P</option>
+                </select>
+              </div>
               <div style={styles.chartWrap}>
                 <ResponsiveContainer width="100%" height={360}>
                   <PieChart>
@@ -312,6 +372,106 @@ export default function App() {
                     <Tooltip content={<ChartTooltip />} />
                     <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {lateMeliData.data.length > 0 && lateMeliData.commentKeys.length > 0 && (
+            <section style={styles.chartSection}>
+              <div style={styles.chartHeader}>
+                <h2 style={styles.sectionTitle}>Órdenes Late – Solo Meli</h2>
+                <select
+                  value={lateMeliFilter}
+                  onChange={(e) => setLateMeliFilter(e.target.value)}
+                  style={styles.select}
+                  aria-label="Filtrar por tipo de orden"
+                >
+                  <option value="total">Total</option>
+                  <option value="2P">2P</option>
+                  <option value="3P">3P</option>
+                </select>
+              </div>
+              <p style={styles.muted}>SLA per mile = &quot;late&quot;, merchant Meli (y sus cuentas). Comentarios por Ageing Buckets.</p>
+              <div style={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart
+                    data={lateMeliData.data}
+                    margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: 'var(--text)', fontSize: 12 }}
+                      angle={-35}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
+                    <Tooltip content={<BarChartTooltip commentKeys={lateMeliData.commentKeys} />} />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
+                    {lateMeliData.commentKeys.map((key, i) => (
+                      <Bar
+                        key={key}
+                        dataKey={key}
+                        name={key}
+                        stackId="a"
+                        fill={COLORS[i % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={0.5}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {lateAllData.data.length > 0 && lateAllData.commentKeys.length > 0 && (
+            <section style={styles.chartSection}>
+              <div style={styles.chartHeader}>
+                <h2 style={styles.sectionTitle}>Órdenes Late – Todos los merchants</h2>
+                <select
+                  value={lateAllFilter}
+                  onChange={(e) => setLateAllFilter(e.target.value)}
+                  style={styles.select}
+                  aria-label="Filtrar por tipo de orden"
+                >
+                  <option value="total">Total</option>
+                  <option value="2P">2P</option>
+                  <option value="3P">3P</option>
+                </select>
+              </div>
+              <p style={styles.muted}>SLA per mile = &quot;late&quot;. Comentarios por Ageing Buckets.</p>
+              <div style={styles.chartWrap}>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart
+                    data={lateAllData.data}
+                    margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: 'var(--text)', fontSize: 12 }}
+                      angle={-35}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
+                    <Tooltip content={<BarChartTooltip commentKeys={lateAllData.commentKeys} />} />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
+                    {lateAllData.commentKeys.map((key, i) => (
+                      <Bar
+                        key={key}
+                        dataKey={key}
+                        name={key}
+                        stackId="a"
+                        fill={COLORS[i % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={0.5}
+                      />
+                    ))}
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </section>
