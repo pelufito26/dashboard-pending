@@ -1,13 +1,14 @@
+/* Tema claro – paleta azul y blanco (nocnoc / dashboard) */
 :root {
-  --bg: #0f0f12;
-  --surface: #18181d;
-  --border: #2a2a32;
-  --text: #e8e8ed;
-  --text-muted: #8b8b9a;
-  --accent: #6366f1;
-  --accent-hover: #818cf8;
-  --success: #22c55e;
-  --warning: #eab308;
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --border: #cbd5e1;
+  --text: #1e293b;
+  --text-muted: #64748b;
+  --accent: #1d4ed8;
+  --accent-hover: #1e40af;
+  --success: #15803d;
+  --warning: #a16207;
   --card-radius: 12px;
 }
 

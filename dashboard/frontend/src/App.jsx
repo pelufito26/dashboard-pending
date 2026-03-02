@@ -3,6 +3,29 @@ import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recha
 
 const API_BASE = '/api'
 
+/** Tooltip legible: fondo claro, muestra comentario/categoría + cantidad de órdenes */
+function ChartTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  const { name, value } = payload[0]
+  return (
+    <div style={{
+      background: '#ffffff',
+      color: '#1e293b',
+      padding: '12px 16px',
+      borderRadius: 8,
+      border: '1px solid #cbd5e1',
+      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+      fontSize: '0.9rem',
+      lineHeight: 1.5,
+      minWidth: 180,
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>Comentario / Categoría</div>
+      <div style={{ color: '#475569', marginBottom: 8, wordBreak: 'break-word' }}>{name}</div>
+      <div style={{ fontWeight: 600 }}>Órdenes: {value}</div>
+    </div>
+  )
+}
+
 // Paleta azul y blanco (tonalidades claras para buena lectura)
 const COLORS = [
   '#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#dbeafe', '#eff6ff',
@@ -215,11 +238,7 @@ export default function App() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
-                      formatter={(value) => [value, 'Órdenes']}
-                      labelStyle={{ color: 'var(--text)' }}
-                    />
+                    <Tooltip content={<ChartTooltip />} />
                     <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -262,11 +281,7 @@ export default function App() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
-                      formatter={(value) => [value, 'Órdenes']}
-                      labelStyle={{ color: 'var(--text)' }}
-                    />
+                    <Tooltip content={<ChartTooltip />} />
                     <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
@@ -294,11 +309,7 @@ export default function App() {
                         <Cell key={i} fill={COLORS[i % COLORS.length]} />
                       ))}
                     </Pie>
-                    <Tooltip
-                      contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)' }}
-                      formatter={(value) => [value, 'Órdenes']}
-                      labelStyle={{ color: 'var(--text)' }}
-                    />
+                    <Tooltip content={<ChartTooltip />} />
                     <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
