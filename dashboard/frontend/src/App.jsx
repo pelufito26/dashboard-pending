@@ -1,27 +1,48 @@
 import { useState, useMemo, useEffect } from 'react'
-import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend } from 'recharts'
+import { PieChart, Pie, Tooltip, ResponsiveContainer, Cell, Legend, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts'
 
 const API_BASE = '/api'
+
+const tooltipStyle = {
+  background: '#ffffff',
+  color: '#1e293b',
+  padding: '12px 16px',
+  borderRadius: 8,
+  border: '1px solid #cbd5e1',
+  boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+  fontSize: '0.9rem',
+  lineHeight: 1.5,
+  minWidth: 180,
+}
 
 /** Tooltip legible: fondo claro, muestra comentario/categoría + cantidad de órdenes */
 function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   const { name, value } = payload[0]
   return (
-    <div style={{
-      background: '#ffffff',
-      color: '#1e293b',
-      padding: '12px 16px',
-      borderRadius: 8,
-      border: '1px solid #cbd5e1',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-      fontSize: '0.9rem',
-      lineHeight: 1.5,
-      minWidth: 180,
-    }}>
+    <div style={tooltipStyle}>
       <div style={{ fontWeight: 600, marginBottom: 4 }}>Comentario / Categoría</div>
       <div style={{ color: '#475569', marginBottom: 8, wordBreak: 'break-word' }}>{name}</div>
       <div style={{ fontWeight: 600 }}>Órdenes: {value}</div>
+    </div>
+  )
+}
+
+/** Tooltip para gráfico de columnas: Ageing Bucket + lista de comentarios y órdenes */
+function BarChartTooltip({ active, payload, label, commentKeys }) {
+  if (!active || !payload?.length) return null
+  const total = payload.reduce((s, p) => s + (p.value || 0), 0)
+  return (
+    <div style={tooltipStyle}>
+      <div style={{ fontWeight: 600, marginBottom: 6 }}>Ageing Bucket</div>
+      <div style={{ color: '#475569', marginBottom: 10 }}>{label}</div>
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>Comentarios y órdenes</div>
+      {payload.filter((p) => p.value != null && p.value !== 0).map((p) => (
+        <div key={p.name} style={{ marginBottom: 2 }}>
+          <span style={{ color: '#475569' }}>{p.name}:</span> <strong>{p.value}</strong>
+        </div>
+      ))}
+      <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid #e2e8f0', fontWeight: 600 }}>Total: {total}</div>
     </div>
   )
 }
@@ -59,6 +80,7 @@ export default function App() {
   const [loadingLast, setLoadingLast] = useState(true)
   const [redisOk, setRedisOk] = useState(null)
   const [merchantChartFilter, setMerchantChartFilter] = useState('total') // 'total' | '2P' | '3P'
+  const [ageingChartFilter, setAgeingChartFilter] = useState('total') // 'total' | '2P' | '3P'
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
@@ -121,38 +143,44 @@ export default function App() {
       .sort((a, b) => b.value - a.value)
   }, [result, merchantChartFilter])
 
+  // Valor del campo "Ageing Buckets (in_process_date)": 3-5, 6-10, 11-20, +20 (tal como viene en los datos)
   const ageingBucket = (row) => {
     const col = 'Ageing Buckets (in_process_date)'
     const raw = row[col]
     if (raw != null && String(raw).trim() !== '') return String(raw).trim()
-    const daysRaw = row['Days since in process date']
-    let d
-    try {
-      d = parseInt(String(daysRaw).replace(/\D/g, ''), 10)
-    } catch {
-      return 'Sin datos'
-    }
-    if (isNaN(d)) return 'Sin datos'
-    if (d <= 3) return '0-3 días'
-    if (d <= 6) return '4-6 días'
-    if (d <= 14) return '7-14 días'
-    return '15+ días'
+    return 'Sin datos'
   }
 
-  const ageingData = useMemo(() => {
-    if (!result?.tabla?.length) return []
-    const counts = {}
-    for (const row of result.tabla) {
-      const b = ageingBucket(row)
-      counts[b] = (counts[b] || 0) + 1
+  // Datos para gráfico de columnas: Comentarios (Accionables) x Ageing Buckets, con filtro 2P/3P/Total
+  const ageingByCommentData = useMemo(() => {
+    if (!result?.tabla?.length) return { data: [], commentKeys: [] }
+    let rows = result.tabla
+    if (ageingChartFilter !== 'total') {
+      rows = rows.filter(
+        (row) => String(row['order_type'] || '').trim().toUpperCase() === ageingChartFilter
+      )
     }
-    const order = ['0-3 días', '4-6 días', '7-14 días', '15+ días', 'Sin datos']
-    const ordered = order.filter((b) => counts[b]).map((name) => ({ name, value: counts[name] }))
-    const rest = Object.keys(counts)
-      .filter((b) => !order.includes(b))
-      .map((name) => ({ name, value: counts[name] }))
-    return ordered.concat(rest)
-  }, [result])
+    // Orden canónico de buckets según el campo Ageing Buckets (in_process_date)
+    const bucketOrder = ['3-5', '6-10', '11-20', '+20', 'Sin datos']
+    const byBucket = {}
+    const commentSet = new Set()
+    for (const row of rows) {
+      const bucket = ageingBucket(row)
+      const comment = String(row['Accionables'] || '').trim() || 'Sin comentario'
+      commentSet.add(comment)
+      if (!byBucket[bucket]) byBucket[bucket] = {}
+      byBucket[bucket][comment] = (byBucket[bucket][comment] || 0) + 1
+    }
+    const commentKeys = Array.from(commentSet).sort((a, b) => a.localeCompare(b))
+    const orderedBuckets = bucketOrder.filter((b) => byBucket[b]).concat(
+      Object.keys(byBucket).filter((b) => !bucketOrder.includes(b))
+    )
+    const data = orderedBuckets.map((bucket) => {
+      const point = { name: bucket, ...byBucket[bucket] }
+      return point
+    })
+    return { data, commentKeys }
+  }, [result, ageingChartFilter])
 
   return (
     <div style={styles.container}>
@@ -289,29 +317,51 @@ export default function App() {
             </section>
           )}
 
-          {ageingData.length > 0 && (
+          {ageingByCommentData.data.length > 0 && ageingByCommentData.commentKeys.length > 0 && (
             <section style={styles.chartSection}>
-              <h2 style={styles.sectionTitle}>Distribución por Ageing Buckets (in_process_date)</h2>
+              <div style={styles.chartHeader}>
+                <h2 style={styles.sectionTitle}>Comentarios por Ageing Buckets (in_process_date)</h2>
+                <select
+                  value={ageingChartFilter}
+                  onChange={(e) => setAgeingChartFilter(e.target.value)}
+                  style={styles.select}
+                  aria-label="Filtrar por tipo de orden"
+                >
+                  <option value="total">Total</option>
+                  <option value="2P">2P</option>
+                  <option value="3P">3P</option>
+                </select>
+              </div>
+              <p style={styles.muted}>Eje horizontal: Ageing Buckets. Barras: cantidad de órdenes por comentario/accionable.</p>
               <div style={styles.chartWrap}>
-                <ResponsiveContainer width="100%" height={360}>
-                  <PieChart>
-                    <Pie
-                      data={ageingData}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={120}
-                      stroke="#fff"
-                      strokeWidth={1.5}
-                    >
-                      {ageingData.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                    <Legend formatter={(value) => <span style={{ color: 'var(--text)' }}>{value}</span>} />
-                  </PieChart>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart
+                    data={ageingByCommentData.data}
+                    margin={{ top: 16, right: 24, left: 24, bottom: 80 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: 'var(--text)', fontSize: 12 }}
+                      angle={-35}
+                      textAnchor="end"
+                      height={60}
+                    />
+                    <YAxis tick={{ fill: 'var(--text)', fontSize: 12 }} label={{ value: 'Órdenes', angle: -90, position: 'insideLeft', style: { fill: 'var(--text)' } }} />
+                    <Tooltip content={<BarChartTooltip commentKeys={ageingByCommentData.commentKeys} />} />
+                    <Legend formatter={(value) => <span style={{ color: 'var(--text)', fontSize: 11 }}>{value}</span>} />
+                    {ageingByCommentData.commentKeys.map((key, i) => (
+                      <Bar
+                        key={key}
+                        dataKey={key}
+                        name={key}
+                        stackId="a"
+                        fill={COLORS[i % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={0.5}
+                      />
+                    ))}
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </section>
