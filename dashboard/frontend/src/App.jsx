@@ -529,9 +529,7 @@ export default function App() {
                 <span>Separar por Ageing</span>
               </label>
             </section>
-          )}
 
-          {result.tabla.length > 0 && (
             <section
               style={styles.chartSection}
               className={showLateByAgeing && lateMeliDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
@@ -611,9 +609,7 @@ export default function App() {
                 )}
               </div>
             </section>
-          )}
 
-          {result.tabla.length > 0 && (
             <section
               style={styles.chartSection}
               className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
@@ -693,8 +689,9 @@ export default function App() {
                 )}
               </div>
             </section>
-          )}
             </div>
+          )}
+
           </div>
 
           {ageingByCommentData.data.length > 0 && ageingByCommentData.commentKeys.length > 0 && (
