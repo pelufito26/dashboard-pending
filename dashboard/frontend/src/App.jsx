@@ -85,6 +85,9 @@ export default function App() {
   const [lateMeliFilter, setLateMeliFilter] = useState('total')
   const [lateAllFilter, setLateAllFilter] = useState('total')
   const [showLateByAgeing, setShowLateByAgeing] = useState(false) // casilla: true = columnas por Ageing, false = torta general
+  // Tablero Comentarios x Ageing: filtros multi-select (vacío = todos)
+  const [tableroMerchants, setTableroMerchants] = useState([]) // ej. ['Meli', 'Walmart']
+  const [tableroOrderTypes, setTableroOrderTypes] = useState([]) // ej. ['2P', '3P']
 
   useEffect(() => {
     fetch(`${API_BASE}/process`)
@@ -171,7 +174,7 @@ export default function App() {
     return 'Sin datos'
   }
 
-  const bucketOrder = ['3-5', '6-10', '11-20', '+20', 'Sin datos']
+  const bucketOrder = ['0-2', '3-5', '6-10', '11-20', '+20', 'Sin datos']
 
   const buildBucketCommentData = (rows) => {
     const byBucket = {}
@@ -269,6 +272,90 @@ export default function App() {
     }
     return buildBucketCommentData(rows)
   }, [result, lateAllFilter])
+
+  // Opciones para filtros del tablero Comentarios x Ageing
+  const tableroMerchantOptions = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    const set = new Set()
+    for (const row of result.tabla) {
+      set.add(merchantGeneral(row['Merchant Name']))
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [result?.tabla])
+
+  const tableroOrderTypeOptions = useMemo(() => {
+    if (!result?.tabla?.length) return []
+    const set = new Set()
+    for (const row of result.tabla) {
+      const ot = String(row['order_type'] || '').trim().toUpperCase()
+      if (ot === '2P' || ot === '3P') set.add(ot)
+    }
+    return Array.from(set).sort()
+  }, [result?.tabla])
+
+  // Matriz: Accionables (filas) x Ageing Buckets (columnas), con filtros merchants y order type
+  const tableroMatrix = useMemo(() => {
+    if (!result?.tabla?.length) return { rows: [], buckets: [], matrix: {}, colTotals: {}, rowTotals: {}, grandTotal: 0 }
+    let rows = result.tabla
+    if (tableroMerchants.length > 0) {
+      const set = new Set(tableroMerchants)
+      rows = rows.filter((row) => set.has(merchantGeneral(row['Merchant Name'])))
+    }
+    if (tableroOrderTypes.length > 0) {
+      const set = new Set(tableroOrderTypes)
+      rows = rows.filter((row) => set.has(String(row['order_type'] || '').trim().toUpperCase()))
+    }
+    const matrix = {}
+    const bucketSet = new Set()
+    for (const row of rows) {
+      const acc = String(row['Accionables'] || '').trim() || 'Sin comentario'
+      const bucket = ageingBucket(row)
+      bucketSet.add(bucket)
+      if (!matrix[acc]) matrix[acc] = {}
+      matrix[acc][bucket] = (matrix[acc][bucket] || 0) + 1
+    }
+    const buckets = bucketOrder.filter((b) => bucketSet.has(b)).concat(
+      Array.from(bucketSet).filter((b) => !bucketOrder.includes(b)).sort()
+    )
+    const accionables = Object.keys(matrix).sort((a, b) => a.localeCompare(b))
+    const colTotals = {}
+    for (const b of buckets) colTotals[b] = 0
+    const rowTotals = {}
+    let grandTotal = 0
+    for (const acc of accionables) {
+      rowTotals[acc] = 0
+      for (const b of buckets) {
+        const v = matrix[acc][b] || 0
+        rowTotals[acc] += v
+        colTotals[b] += v
+        grandTotal += v
+      }
+    }
+    return { rows: accionables, buckets, matrix, colTotals, rowTotals, grandTotal }
+  }, [result?.tabla, tableroMerchants, tableroOrderTypes])
+
+  const toggleTableroMerchant = (m) => {
+    setTableroMerchants((prev) => {
+      if (prev.length === 0) {
+        return tableroMerchantOptions.filter((x) => x !== m)
+      }
+      if (prev.includes(m)) {
+        const next = prev.filter((x) => x !== m)
+        return next.length === 0 ? [] : next
+      }
+      const next = [...prev, m]
+      return next.length === tableroMerchantOptions.length ? [] : next
+    })
+  }
+  const toggleTableroOrderType = (ot) => {
+    setTableroOrderTypes((prev) => {
+      if (prev.includes(ot)) {
+        const next = prev.filter((x) => x !== ot)
+        return next
+      }
+      return [...prev, ot]
+    })
+  }
 
   return (
     <div style={styles.container}>
@@ -421,7 +508,7 @@ export default function App() {
             </section>
           )}
 
-          {(lateMeliData.length > 0 || lateAllData.length > 0) && (
+          {result.tabla.length > 0 && (
             <section style={styles.chartSection} className="dashboard-bar-full">
               <label style={styles.checkboxLabel}>
                 <input
@@ -435,7 +522,7 @@ export default function App() {
             </section>
           )}
 
-          {lateMeliData.length > 0 && (
+          {result.tabla.length > 0 && (
             <section
               style={styles.chartSection}
               className={showLateByAgeing && lateMeliDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
@@ -459,7 +546,9 @@ export default function App() {
                   : 'SLA per mile = "late", merchant Meli (y sus cuentas). Distribución por comentarios.'}
               </p>
               <div style={styles.chartWrap} className={showLateByAgeing && lateMeliDataByAgeing.data.length > 0 ? '' : 'chart-tile-inner'}>
-                {showLateByAgeing && lateMeliDataByAgeing.data.length > 0 && lateMeliDataByAgeing.commentKeys.length > 0 ? (
+                {lateMeliData.length === 0 ? (
+                  <p style={styles.muted}>No hay órdenes late para Meli en este archivo.</p>
+                ) : showLateByAgeing && lateMeliDataByAgeing.data.length > 0 && lateMeliDataByAgeing.commentKeys.length > 0 ? (
                   <ResponsiveContainer width="100%" height={380}>
                     <BarChart
                       data={lateMeliDataByAgeing.data}
@@ -515,7 +604,7 @@ export default function App() {
             </section>
           )}
 
-          {lateAllData.length > 0 && (
+          {result.tabla.length > 0 && (
             <section
               style={styles.chartSection}
               className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
@@ -539,7 +628,9 @@ export default function App() {
                   : 'SLA per mile = "late". Distribución por comentarios.'}
               </p>
               <div style={styles.chartWrap} className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? '' : 'chart-tile-inner'}>
-                {showLateByAgeing && lateAllDataByAgeing.data.length > 0 && lateAllDataByAgeing.commentKeys.length > 0 ? (
+                {lateAllData.length === 0 ? (
+                  <p style={styles.muted}>No hay órdenes late en este archivo.</p>
+                ) : showLateByAgeing && lateAllDataByAgeing.data.length > 0 && lateAllDataByAgeing.commentKeys.length > 0 ? (
                   <ResponsiveContainer width="100%" height={380}>
                     <BarChart
                       data={lateAllDataByAgeing.data}
@@ -642,6 +733,108 @@ export default function App() {
                     ))}
                   </BarChart>
                 </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          {result.tabla.length > 0 && tableroMatrix.rows.length >= 0 && (
+            <section style={styles.chartSectionWide}>
+              <h2 style={styles.sectionTitle}>Tablero Comentarios x Ageing (in_process_date)</h2>
+              <p style={styles.muted}>
+                Eje vertical: Accionables (comentarios). Eje horizontal: Ageing Buckets. Contaje de Order Id. Filtrá por merchants y/o order type.
+              </p>
+              <div style={styles.filters}>
+                <div style={styles.filterGroup}>
+                  <span style={styles.filterLabel}>Merchants:</span>
+                  <div style={styles.checkboxGroup}>
+                    {tableroMerchantOptions.map((m) => (
+                      <label key={m} style={styles.checkboxLabel}>
+                        <input
+                          type="checkbox"
+                          checked={tableroMerchants.length === 0 || tableroMerchants.includes(m)}
+                          onChange={() => toggleTableroMerchant(m)}
+                          style={styles.checkbox}
+                        />
+                        <span>{m}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {tableroMerchantOptions.length > 0 && (
+                    <button
+                      type="button"
+                      style={styles.btnLimpiar}
+                      onClick={() => setTableroMerchants([])}
+                    >
+                      Ver todos los merchants
+                    </button>
+                  )}
+                </div>
+                <div style={styles.filterGroup}>
+                  <span style={styles.filterLabel}>Order type:</span>
+                  <div style={styles.checkboxGroup}>
+                    {tableroOrderTypeOptions.map((ot) => (
+                      <label key={ot} style={styles.checkboxLabel}>
+                        <input
+                          type="checkbox"
+                          checked={tableroOrderTypes.length === 0 || tableroOrderTypes.includes(ot)}
+                          onChange={() => toggleTableroOrderType(ot)}
+                          style={styles.checkbox}
+                        />
+                        <span>{ot}</span>
+                      </label>
+                    ))}
+                  </div>
+                  {tableroOrderTypeOptions.length > 0 && (
+                    <button
+                      type="button"
+                      style={styles.btnLimpiar}
+                      onClick={() => setTableroOrderTypes([])}
+                    >
+                      Ver todos
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div style={styles.tableWrap}>
+                <table style={styles.table}>
+                  <thead>
+                    <tr>
+                      <th style={styles.th}>Accionables</th>
+                      {tableroMatrix.buckets.map((b) => (
+                        <th key={b} style={{ ...styles.th, textAlign: 'right' }}>{b}</th>
+                      ))}
+                      <th style={{ ...styles.th, textAlign: 'right' }}>Suma total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableroMatrix.rows.map((acc) => (
+                      <tr key={acc} style={styles.tr}>
+                        <td style={{ ...styles.td, maxWidth: 360 }} title={acc}>{acc}</td>
+                        {tableroMatrix.buckets.map((b) => (
+                          <td key={b} style={{ ...styles.td, textAlign: 'right' }}>
+                            {tableroMatrix.matrix[acc][b] ?? 0}
+                          </td>
+                        ))}
+                        <td style={{ ...styles.td, textAlign: 'right', fontWeight: 600 }}>
+                          {tableroMatrix.rowTotals[acc] ?? 0}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ ...styles.tr, fontWeight: 700, background: 'var(--surface)' }}>
+                      <td style={styles.td}>Suma total</td>
+                      {tableroMatrix.buckets.map((b) => (
+                        <td key={b} style={{ ...styles.td, textAlign: 'right' }}>
+                          {tableroMatrix.colTotals[b] ?? 0}
+                        </td>
+                      ))}
+                      <td style={{ ...styles.td, textAlign: 'right' }}>
+                        {tableroMatrix.grandTotal}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </section>
           )}
@@ -768,6 +961,23 @@ const styles = {
     gap: '0.75rem',
     marginBottom: '1rem',
     flexWrap: 'wrap',
+  },
+  filterGroup: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '0.5rem 1rem',
+  },
+  filterLabel: {
+    color: 'var(--text-muted)',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    marginRight: '0.25rem',
+  },
+  checkboxGroup: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '0.5rem 1rem',
   },
   select: {
     minWidth: 180,
