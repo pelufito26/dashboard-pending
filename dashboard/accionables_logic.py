@@ -104,11 +104,15 @@ def _generar_accionable_row(row, fecha_hoy):
             pass
     else:
         if pd.notna(row.get('Scraped Eta Amazon')):
-            fecha_parseada = parsear_scraped_eta(row['Scraped Eta Amazon'], fecha_hoy)
-            if fecha_parseada:
-                acc = evaluar_fecha_eta(fecha_parseada, fecha_hoy)
-                if acc:
-                    accionables.append(acc)
+            scraped_text = str(row['Scraped Eta Amazon']).strip().lower()
+            if 'arriving today' in scraped_text or scraped_text == 'today':
+                accionables.append('Entrega fecha futura')
+            else:
+                fecha_parseada = parsear_scraped_eta(row['Scraped Eta Amazon'], fecha_hoy)
+                if fecha_parseada:
+                    acc = evaluar_fecha_eta(fecha_parseada, fecha_hoy)
+                    if acc:
+                        accionables.append(acc)
 
     if pd.notna(row.get('order_type')) and pd.notna(row.get('Order Status + Aux (fso)')):
         order_type = str(row['order_type']).strip().upper()
@@ -144,15 +148,23 @@ def _generar_accionable_row(row, fecha_hoy):
     # Filtros 8-11: 3P in_process por país y días
     order_status = str(row.get('Order Status + Aux (fso)', '')).strip()
     order_type = str(row.get('order_type', '')).strip().upper()
-    seller_country = str(row.get('Seller Country Iso', '')).strip().upper()
-    days_raw = row.get('Days since in process date')
+    seller_country_raw = row.get('Seller Country Iso')
+    seller_country = ''
+    if pd.notna(seller_country_raw) and str(seller_country_raw).strip():
+        seller_country = str(seller_country_raw).strip().upper().replace('.', '').replace(' ', '')
+        if seller_country == 'USA':
+            seller_country = 'US'
+    days_raw = row.get('Days since in process date') or row.get('Days since in process') or row.get('Ageing') or row.get('aging')
     try:
         days = int(float(str(days_raw).replace(',', '.'))) if pd.notna(days_raw) and str(days_raw).strip() != '' else None
     except (ValueError, TypeError):
         days = None
 
-    if order_type == '3P' and order_status == 'in_process -' and days is not None and seller_country:
-        if seller_country == 'US' and days < 6:
+    # Aceptar "in_process -" o "in_process" (por variaciones en el Excel)
+    is_in_process = order_status in ('in_process -', 'in_process') or order_status.startswith('in_process')
+
+    if order_type == '3P' and is_in_process and days is not None and seller_country:
+        if seller_country == 'US' and 0 <= days <= 5:
             accionables.append('Seller a tiempo de enviar')
         elif seller_country == 'CN' and days < 4:
             accionables.append('Seller a tiempo de enviar')
@@ -160,6 +172,10 @@ def _generar_accionable_row(row, fecha_hoy):
             accionables.append('Orden en condiciones para reasignar')
         elif seller_country == 'CN' and days >= 4:
             accionables.append('Orden en condiciones para reasignar')
+
+    # Si no tiene ningún comentario y el status es "sent -", asignar "Orden en sent"
+    if not accionables and order_status == 'sent -':
+        return 'Orden en sent'
 
     return ' | '.join(accionables) if accionables else ''
 

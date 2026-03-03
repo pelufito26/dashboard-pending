@@ -400,35 +400,39 @@ export default function App() {
 
       {result && (
         <>
-          <section style={styles.cards}>
-            <div style={styles.card}>
-              <div style={styles.cardLabel}>Órdenes totales</div>
-              <div style={styles.cardValue}>{result.stats.ordenes_totales}</div>
-            </div>
-            <div style={styles.card}>
-              <div style={styles.cardLabel}>Con milestone válido</div>
-              <div style={styles.cardValue}>{result.stats.ordenes_milestone_valido}</div>
-            </div>
-            <div style={styles.card}>
-              <div style={styles.cardLabel}>Con accionables</div>
-              <div style={{ ...styles.cardValue, color: 'var(--accent)' }}>
-                {result.stats.ordenes_con_accionables}
+          <div style={styles.recuadro}>
+            <h2 style={styles.recuadroTitle}>Resumen</h2>
+            <section style={styles.cards}>
+              <div style={styles.card}>
+                <div style={styles.cardLabel}>Órdenes totales</div>
+                <div style={styles.cardValue}>{result.stats.ordenes_totales}</div>
               </div>
-            </div>
-            <div style={styles.card}>
-              <div style={styles.cardLabel}>Fecha de análisis</div>
-              <div style={styles.cardValueSmall}>{result.stats.fecha_analisis}</div>
-            </div>
-          </section>
-          <p style={styles.milestoneNote}>
-            Milestones válidos: <strong>1.1 - First Mile: Seller</strong> y <strong>1.2 - Already with seller_delivered_at</strong>. Todos los datos del tablero aplican solo a órdenes con estos milestones.
-          </p>
+              <div style={styles.card}>
+                <div style={styles.cardLabel}>Con milestone válido</div>
+                <div style={styles.cardValue}>{result.stats.ordenes_milestone_valido}</div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardLabel}>Con accionables</div>
+                <div style={{ ...styles.cardValue, color: 'var(--accent)' }}>
+                  {result.stats.ordenes_con_accionables}
+                </div>
+              </div>
+              <div style={styles.card}>
+                <div style={styles.cardLabel}>Fecha de análisis</div>
+                <div style={styles.cardValueSmall}>{result.stats.fecha_analisis}</div>
+              </div>
+            </section>
+            <p style={styles.milestoneNote}>
+              Milestones válidos: <strong>1.1 - First Mile: Seller</strong> y <strong>1.2 - Already with seller_delivered_at</strong>. Todos los datos del tablero aplican solo a órdenes con estos milestones.
+            </p>
+          </div>
 
           <div className="dashboard-pie-grid">
           {chartData.length > 0 && (
-            <section style={styles.chartSection} className="dashboard-card-tile">
+            <div style={styles.recuadro} className="dashboard-card-tile">
+            <h2 style={styles.recuadroTitle}>Distribución de accionables</h2>
+            <section style={styles.chartSection}>
               <div style={styles.chartHeader}>
-                <h2 style={styles.sectionTitle}>Distribución de accionables</h2>
                 <select
                   value={accionablesChartFilter}
                   onChange={(e) => setAccionablesChartFilter(e.target.value)}
@@ -463,12 +467,14 @@ export default function App() {
                 </ResponsiveContainer>
               </div>
             </section>
+            </div>
           )}
 
           {merchantGeneralData.length > 0 && (
-            <section style={styles.chartSection} className="dashboard-card-tile">
+            <div style={styles.recuadro} className="dashboard-card-tile">
+            <h2 style={styles.recuadroTitle}>Distribución por Merchant</h2>
+            <section style={styles.chartSection}>
               <div style={styles.chartHeader}>
-                <h2 style={styles.sectionTitle}>Distribución por Merchant</h2>
                 <select
                   value={merchantChartFilter}
                   onChange={(e) => setMerchantChartFilter(e.target.value)}
@@ -506,9 +512,12 @@ export default function App() {
                 </ResponsiveContainer>
               </div>
             </section>
+            </div>
           )}
 
           {result.tabla.length > 0 && (
+            <div style={{ ...styles.recuadro, gridColumn: '1 / -1' }}>
+            <h2 style={styles.recuadroTitle}>Órdenes Late</h2>
             <section style={styles.chartSection} className="dashboard-bar-full">
               <label style={styles.checkboxLabel}>
                 <input
@@ -610,7 +619,7 @@ export default function App() {
               className={showLateByAgeing && lateAllDataByAgeing.data.length > 0 ? 'dashboard-bar-full' : 'dashboard-card-tile'}
             >
               <div style={styles.chartHeader}>
-                <h2 style={styles.sectionTitle}>Órdenes Late – Todos los merchants</h2>
+                <span style={styles.sectionTitle}>Órdenes Late – Todos los merchants</span>
                 <select
                   value={lateAllFilter}
                   onChange={(e) => setLateAllFilter(e.target.value)}
@@ -685,12 +694,14 @@ export default function App() {
               </div>
             </section>
           )}
+            </div>
           </div>
 
           {ageingByCommentData.data.length > 0 && ageingByCommentData.commentKeys.length > 0 && (
+            <div style={styles.recuadro}>
+            <h2 style={styles.recuadroTitle}>Comentarios por Ageing Buckets (in_process_date)</h2>
             <section style={styles.chartSectionWide}>
               <div style={styles.chartHeader}>
-                <h2 style={styles.sectionTitle}>Comentarios por Ageing Buckets (in_process_date)</h2>
                 <select
                   value={ageingChartFilter}
                   onChange={(e) => setAgeingChartFilter(e.target.value)}
@@ -735,11 +746,13 @@ export default function App() {
                 </ResponsiveContainer>
               </div>
             </section>
+            </div>
           )}
 
           {result.tabla.length > 0 && tableroMatrix.rows.length >= 0 && (
+            <div style={styles.recuadro}>
+            <h2 style={styles.recuadroTitle}>Tablero Comentarios x Ageing (in_process_date)</h2>
             <section style={styles.chartSectionWide}>
-              <h2 style={styles.sectionTitle}>Tablero Comentarios x Ageing (in_process_date)</h2>
               <p style={styles.muted}>
                 Eje vertical: Accionables (comentarios). Eje horizontal: Ageing Buckets. Contaje de Order Id. Filtrá por merchants y/o order type.
               </p>
@@ -837,6 +850,7 @@ export default function App() {
                 </table>
               </div>
             </section>
+            </div>
           )}
         </>
       )}
@@ -1046,7 +1060,23 @@ const styles = {
     color: 'var(--text-muted)',
     fontSize: '0.85rem',
     marginTop: '0.25rem',
+    marginBottom: 0,
+  },
+  recuadro: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--card-radius)',
+    padding: '1.25rem',
     marginBottom: '1.5rem',
+    boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+  },
+  recuadroTitle: {
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: 'var(--accent)',
+    marginBottom: '1rem',
+    paddingBottom: '0.5rem',
+    borderBottom: '1px solid var(--border)',
   },
   checkboxLabel: {
     display: 'inline-flex',
